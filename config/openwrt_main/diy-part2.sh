@@ -48,6 +48,28 @@ fi
 # Add luci-app-amlogic
 rm -rf package/luci-app-amlogic
 git clone -b main https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
+
+# Enable bypass router (side-gateway) mode default settings
+# Set the default IPv4 gateway to 192.168.0.1, disable DHCP and IPv6
+[[ "${3}" == "true" ]] && {
+    echo "Enable bypass router mode default settings."
+    mkdir -p files/etc/uci-defaults
+    cat > files/etc/uci-defaults/99-bypass-router <<'EOF'
+#!/bin/sh
+uci -q set network.lan.gateway='192.168.0.1'
+uci -q set network.lan.dns='192.168.0.1'
+uci -q delete network.lan.ip6assign
+uci -q delete network.lan.ip6hint
+uci -q delete network.wan6
+uci -q set dhcp.lan.ignore='1'
+uci -q set dhcp.lan.dhcpv6='disabled'
+uci -q set dhcp.lan.ra='disabled'
+uci -q set dhcp.lan.ndp='disabled'
+uci -q set dhcp.odhcpd.maindhcp='0'
+uci -q commit
+EOF
+    chmod +x files/etc/uci-defaults/99-bypass-router
+}
 #
 # Apply patches
 # git apply ../config/patches/{0001*,0002*}.patch --directory=feeds/luci

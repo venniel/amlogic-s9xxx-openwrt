@@ -312,7 +312,12 @@ on:
       openwrt_ip:
         description: "Set OpenWrt default IP address."
         required: false
-        default: "192.168.1.1"
+        default: "192.168.0.3"
+      openwrt_bypass:
+        description: "Enable bypass router (side-gateway) mode: no DHCP, no IPv6, gateway 192.168.0.1."
+        required: false
+        default: false
+        type: boolean
       use_ccache:
         description: "Auto use ccache."
         required: false
@@ -479,7 +484,7 @@ jobs:
           [[ -e "${CONFIG_FILE}" ]] && cp -f ${CONFIG_FILE} openwrt/.config
           chmod +x ${DIY_P2_SH}
           cd openwrt/
-          ${{ github.workspace }}/${DIY_P2_SH} "${{ inputs.openwrt_ip }}" "${{ inputs.use_ccache }}"
+          ${{ github.workspace }}/${DIY_P2_SH} "${{ inputs.openwrt_ip }}" "${{ inputs.use_ccache }}" "${{ inputs.openwrt_bypass }}"
 
       - name: Download package
         id: package
