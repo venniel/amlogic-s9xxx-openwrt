@@ -49,27 +49,84 @@ fi
 rm -rf package/luci-app-amlogic
 git clone -b main https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
 
-# Enable bypass router (side-gateway) mode default settings
-# Set the default IPv4 gateway to 192.168.0.1, disable DHCP and IPv6
-[[ "${3}" == "true" ]] && {
+# Write the default network configuration directly
+# [ config_generate ] only generates /etc/config/network when the file does not
+# exist, so writing it here makes the settings take effect from the first boot
+lan_ip="${1}"
+[[ -n "${lan_ip}" && "${lan_ip}" =~ ${ip_regex} ]] || lan_ip="${default_ip}"
+mkdir -p files/etc/config
+if [[ "${3}" == "true" ]]; then
     echo "Enable bypass router mode default settings."
-    mkdir -p files/etc/uci-defaults
-    cat > files/etc/uci-defaults/99-bypass-router <<'EOF'
-#!/bin/sh
-uci -q set network.lan.gateway='192.168.0.1'
-uci -q set network.lan.dns='192.168.0.1'
-uci -q delete network.lan.ip6assign
-uci -q delete network.lan.ip6hint
-uci -q delete network.wan6
-uci -q set dhcp.lan.ignore='1'
-uci -q set dhcp.lan.dhcpv6='disabled'
-uci -q set dhcp.lan.ra='disabled'
-uci -q set dhcp.lan.ndp='disabled'
-uci -q set dhcp.odhcpd.maindhcp='0'
-uci -q commit
+    # Side-gateway mode: gateway/DNS point to the main router, no DHCP, no IPv6
+    net_extra="	option gateway '192.168.0.1'
+	option dns '192.168.0.1'"
+    dhcp_lan="	option ignore '1'
+	option dhcpv4 'disabled'
+	option dhcpv6 'disabled'
+	option ra 'disabled'"
+else
+    net_extra="	option ip6assign '60'"
+    dhcp_lan="	option dhcpv4 'server'
+	option dhcpv6 'server'
+	option ra 'server'"
+fi
+cat > files/etc/config/network <<EOF
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth0'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '${lan_ip}'
+	option netmask '255.255.255.0'
+${net_extra}
 EOF
-    chmod +x files/etc/uci-defaults/99-bypass-router
-}
+cat > files/etc/config/dhcp <<EOF
+config dnsmasq
+	option domainneeded '1'
+	option boguspriv '1'
+	option filterwin2k '0'
+	option localise_queries '1'
+	option rebind_protection '1'
+	option rebind_localhost '1'
+	option local '/lan/'
+	option domain 'lan'
+	option expandhosts '1'
+	option nonegcache '0'
+	option cachesize '1000'
+	option authoritative '1'
+	option readethers '1'
+	option leasefile '/tmp/dhcp.leases'
+	option resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
+	option nonwildcard '1'
+	option localservice '1'
+	option ednspacket_max '1232'
+
+config dhcp 'lan'
+	option interface 'lan'
+	option start '100'
+	option limit '150'
+	option leasetime '12h'
+${dhcp_lan}
+	option ra_slaac '1'
+	list ra_flags 'managed-config'
+	list ra_flags 'other-config'
+	option ndp 'disabled'
+
+config odhcpd 'odhcpd'
+	option maindhcp '0'
+	option leasefile '/tmp/hosts/odhcpd'
+	option leasetrigger '/usr/sbin/odhcpd-update'
+	option loglevel '4'
+EOF
 #
 # Apply patches
 # git apply ../config/patches/{0001*,0002*}.patch --directory=feeds/luci
