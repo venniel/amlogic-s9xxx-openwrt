@@ -9,16 +9,20 @@ on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      source_branch:
-        description: "Select the source branch"
+      source_repo:
+        description: "Select the source code repository"
         required: false
         default: "all"
         type: choice
         options:
           - all
-          - openwrt_main
-          - lede_master
-          - immortalwrt_master
+          - openwrt
+          - lede
+          - immortalwrt
+      source_branch:
+        description: "Set the source code branch, e.g. main / master / openwrt-24.10. Leave empty to use the repository default branch (openwrt: main, lede/immortalwrt: master)."
+        required: false
+        default: ""
       openwrt_board:
         description: "Select device board"
         required: false
@@ -351,13 +355,28 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Set build matrix based on source_branch input
+      - name: Set build matrix based on source_repo and source_branch inputs
         id: set-matrix
         run: |
-          if [[ "${{ inputs.source_branch }}" == "all" ]]; then
-            MATRIX='{"include":[{"branch":"openwrt_main"},{"branch":"lede_master"},{"branch":"immortalwrt_master"}]}'
+          # Default branch of each source code repository
+          default_branch() {
+            case "${1}" in
+              openwrt) echo "main" ;;
+              lede) echo "master" ;;
+              immortalwrt) echo "master" ;;
+            esac
+          }
+
+          if [[ "${{ inputs.source_repo }}" == "all" ]]; then
+            # The [ source_branch ] input is ignored when building all repositories
+            MATRIX='{"include":[{"repo":"openwrt","branch":"main","config":"openwrt_main"},{"repo":"lede","branch":"master","config":"lede_master"},{"repo":"immortalwrt","branch":"master","config":"immortalwrt_master"}]}'
           else
-            MATRIX='{"include":[{"branch":"${{ inputs.source_branch }}"}]}'
+            repo="${{ inputs.source_repo }}"
+            default="$(default_branch "${repo}")"
+            branch="${{ inputs.source_branch }}"
+            [[ -n "${branch}" ]] || branch="${default}"
+            # Always use the existing configuration files of the repository, regardless of the branch
+            MATRIX="{\"include\":[{\"repo\":\"${repo}\",\"branch\":\"${branch}\",\"config\":\"${repo}_${default}\"}]}"
           fi
           echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"
 
@@ -372,13 +391,15 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
-    name: build-${{ matrix.branch }}
+    name: build-${{ matrix.repo }}_${{ matrix.branch }}
 
     env:
-      FEEDS_CONF: config/${{ matrix.branch }}/feeds.conf.default
-      CONFIG_FILE: config/${{ matrix.branch }}/config
-      DIY_P1_SH: config/${{ matrix.branch }}/diy-part1.sh
-      DIY_P2_SH: config/${{ matrix.branch }}/diy-part2.sh
+      SOURCE_REPO: ${{ matrix.repo }}
+      SOURCE_BRANCH: ${{ matrix.branch }}
+      FEEDS_CONF: config/${{ matrix.config }}/feeds.conf.default
+      CONFIG_FILE: config/${{ matrix.config }}/config
+      DIY_P1_SH: config/${{ matrix.config }}/diy-part1.sh
+      DIY_P2_SH: config/${{ matrix.config }}/diy-part2.sh
 
     steps:
       - name: Checkout
@@ -431,25 +452,24 @@ jobs:
           df -Th
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Clone source code [ ${{ matrix.branch }} ]
+      - name: Clone source code [ ${{ matrix.repo }} / ${{ matrix.branch }} ]
         id: codes
         working-directory: /builder
         if: ${{ steps.init.outputs.status == 'success' && !cancelled() }}
         run: |
           # Determine the OpenWrt source code repository
-          if [[ "${{ matrix.branch }}" =~ ^openwrt ]]; then
+          if [[ "${SOURCE_REPO}" == "openwrt" ]]; then
               REPO_URL="https://github.com/openwrt/openwrt"
-          elif [[ "${{ matrix.branch }}" =~ ^lede ]]; then
+          elif [[ "${SOURCE_REPO}" == "lede" ]]; then
               REPO_URL="https://github.com/coolsnowwolf/lede"
-          elif [[ "${{ matrix.branch }}" =~ ^immortalwrt ]]; then
+          elif [[ "${SOURCE_REPO}" == "immortalwrt" ]]; then
               REPO_URL="https://github.com/immortalwrt/immortalwrt"
           else
-              echo "Error: Unknown source code repository."
+              echo "Error: Unknown source code repository [ ${SOURCE_REPO} ]."
               exit 1
           fi
-          source_branch_input="${{ matrix.branch }}"
-          REPO_NAME="${source_branch_input%_*}"
-          REPO_BRANCH="${source_branch_input##*_}"
+          REPO_NAME="${SOURCE_REPO}"
+          REPO_BRANCH="${SOURCE_BRANCH}"
 
           # Clone the source code repository
           git clone -q --single-branch --depth=1 --branch=${REPO_BRANCH} ${REPO_URL} openwrt
@@ -457,7 +477,7 @@ jobs:
           ln -sf /builder/openwrt /home/runner/work/_actions/ophub/amlogic-s9xxx-openwrt/main/openwrt
 
           # Export build metadata
-          echo "build_tag=OpenWrt_${{ matrix.branch }}_${{ inputs.openwrt_storage }}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
+          echo "build_tag=OpenWrt_${SOURCE_REPO}_${SOURCE_BRANCH}_${{ inputs.openwrt_storage }}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
           echo -e "REPO_URL: [ ${REPO_URL} ]\nREPO_BRANCH: [ ${REPO_BRANCH} ]\nREPO_NAME: [ ${REPO_NAME} ]"
           df -hT ${PWD}
           echo "REPO_URL=${REPO_URL}" >> ${GITHUB_ENV}
@@ -595,6 +615,8 @@ jobs:
             ### Install to EMMC
             - Login to OpenWrt → `System` → `Amlogic Service` → `Install OpenWrt`
             ### OpenWrt source code
+            - Repository: `${{ env.REPO_NAME }}`
+            - Branch: `${{ env.REPO_BRANCH }}`
             - [${{ env.REPO_NAME }}](${{ env.REPO_URL }}/tree/${{ env.REPO_BRANCH }})
             ### Applicable Platform
             - 🐧 `arm64`
