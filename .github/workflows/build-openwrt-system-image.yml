@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       source_repo:
-        description: "Select the source code repository"
+        description: "选择源码仓库"
         required: false
         default: "all"
         type: choice
@@ -20,11 +20,11 @@ on:
           - lede
           - immortalwrt
       source_branch:
-        description: "Set the source code branch, e.g. main / master / openwrt-24.10. Leave empty to use the repository default branch (openwrt: main, lede/immortalwrt: master)."
+        description: "设置源码分支，例如 main / master / openwrt-24.10。留空则使用仓库默认分支（openwrt: main，lede/immortalwrt: master）。"
         required: false
         default: ""
       openwrt_board:
-        description: "Select device board"
+        description: "选择设备板型"
         required: false
         default: "all"
         type: choice
@@ -276,7 +276,7 @@ on:
           - ztl-a568
           - zysj
       openwrt_kernel:
-        description: "Select kernel version"
+        description: "选择内核版本"
         required: false
         default: "6.12.y_6.18.y"
         type: choice
@@ -293,19 +293,19 @@ on:
           - 6.1.y_6.12.y
           - 6.1.y_6.18.y
       auto_kernel:
-        description: "Auto use the latest kernel"
+        description: "自动使用最新内核"
         required: false
         default: true
         type: boolean
       kernel_repo:
-        description: "Set the kernel repository"
+        description: "设置内核仓库"
         required: false
         default: "ophub/kernel"
         type: choice
         options:
           - ophub/kernel
       kernel_usage:
-        description: "Set the tags of the stable kernel."
+        description: "设置稳定内核的标签"
         required: false
         default: "stable"
         type: choice
@@ -314,29 +314,33 @@ on:
           - flippy
           - beta
       openwrt_ip:
-        description: "Set OpenWrt default IP address."
+        description: "设置 OpenWrt 默认 IP 地址"
         required: false
         default: "192.168.0.3"
       openwrt_bypass:
-        description: "Enable bypass router (side-gateway) mode: no DHCP, no IPv6, gateway 192.168.0.1."
+        description: "启用旁路由(旁路网关)模式：不启用 DHCPv4，保留 IPv6 网络访问，网关指向 192.168.0.1"
         required: false
         default: false
         type: boolean
       use_ccache:
-        description: "Auto use ccache."
+        description: "自动使用 ccache"
         required: false
         default: true
         type: boolean
       openwrt_storage:
-        description: "Select image storage type."
+        description: "选择镜像存储类型"
         required: false
         default: "save"
         type: choice
         options:
           - save
           - temp
+      openwrt_size:
+        description: "设置 rootfs 分区大小（单位 MiB，整数，最小 1024）。留空使用默认 1280。如需同时指定 boot 分区可填 boot/root，例如 384/2560（boot 最小 256，root 最小 1024）。"
+        required: false
+        default: ""
       builder_name:
-        description: "Set OpenWrt builder signature."
+        description: "设置 OpenWrt 构建者签名"
         required: false
         default: "ophub"
         type: choice
@@ -587,6 +591,7 @@ jobs:
         with:
           openwrt_path: openwrt/output/*rootfs.tar.gz
           openwrt_ip: ${{ inputs.openwrt_ip }}
+          openwrt_size: ${{ inputs.openwrt_size }}
           openwrt_board: ${{ inputs.openwrt_board }}
           openwrt_kernel: ${{ inputs.openwrt_kernel }}
           auto_kernel: ${{ inputs.auto_kernel }}

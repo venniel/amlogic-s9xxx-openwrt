@@ -57,9 +57,11 @@ lan_ip="${1}"
 mkdir -p files/etc/config
 if [[ "${3}" == "true" ]]; then
     echo "Enable bypass router mode default settings."
-    # Side-gateway mode: gateway/DNS point to the main router, no DHCP, no IPv6
+    # Side-gateway mode: gateway/DNS point to the main router, no DHCPv4.
+    # IPv6 stays enabled so this device can still reach IPv6 networks.
     net_extra="	option gateway '192.168.0.1'
-	option dns '192.168.0.1'"
+	option dns '192.168.0.1'
+	option ip6assign '60'"
     dhcp_lan="	option ignore '1'
 	option dhcpv4 'disabled'
 	option dhcpv6 'disabled'
