@@ -63,12 +63,21 @@ if [[ "${3}" == "true" ]]; then
     # Side-gateway mode: gateway/DNS point to the main router, no DHCPv4.
     # IPv6 stays enabled so this device can still reach IPv6 networks.
     net_extra="	option gateway '192.168.0.1'
-	option dns '192.168.0.1'
-	option ip6assign '60'"
+	option dns '192.168.0.1'"
     dhcp_lan="	option ignore '1'
 	option dhcpv4 'disabled'
 	option dhcpv6 'disabled'
 	option ra 'disabled'"
+    # IPv6 forwarding is enabled by default, which makes the kernel set
+    # accept_ra to 0 and ignore the main router's Router Advertisements.
+    # Accept RAs explicitly so this single-NIC side gateway obtains a global
+    # IPv6 address and a default route from the main router.
+    mkdir -p files/etc/sysctl.d
+    cat > files/etc/sysctl.d/99-ipv6-accept-ra.conf <<EOF
+net.ipv6.conf.all.accept_ra=2
+net.ipv6.conf.default.accept_ra=2
+net.ipv6.conf.br-lan.accept_ra=2
+EOF
 else
     net_extra="	option ip6assign '60'"
     dhcp_lan="	option dhcpv4 'server'
