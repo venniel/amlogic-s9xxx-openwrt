@@ -20,7 +20,7 @@ on:
           - lede
           - immortalwrt
       source_branch:
-        description: "设置源码分支，例如 main / master / openwrt-24.10。留空则使用仓库默认分支（openwrt: main，lede/immortalwrt: master）。"
+        description: "设置源码分支。选择单个仓库时填一个分支（如 main / master / openwrt-24.10）；选择 all 时可按顺序填写多个分支，用逗号或空格分隔，对应 openwrt、lede、immortalwrt，例如 main,master,openwrt-24.10。留空或省略的仓库使用默认分支（openwrt: main，lede/immortalwrt: master）。"
         required: false
         default: ""
       openwrt_board:
@@ -372,8 +372,15 @@ jobs:
           }
 
           if [[ "${{ inputs.source_repo }}" == "all" ]]; then
-            # The [ source_branch ] input is ignored when building all repositories
-            MATRIX='{"include":[{"repo":"openwrt","branch":"main","config":"openwrt_main"},{"repo":"lede","branch":"master","config":"lede_master"},{"repo":"immortalwrt","branch":"master","config":"immortalwrt_master"}]}'
+            # When building all repositories, [ source_branch ] may list branches
+            # separated by commas or spaces, matching openwrt/lede/immortalwrt in order.
+            sb="${{ inputs.source_branch }}"
+            if [[ "${sb}" == *,* ]]; then sb="${sb// /}"; else sb="${sb// /,}"; fi
+            IFS=',' read -ra br <<< "${sb}"
+            b_openwrt="${br[0]:-$(default_branch openwrt)}"
+            b_lede="${br[1]:-$(default_branch lede)}"
+            b_immortalwrt="${br[2]:-$(default_branch immortalwrt)}"
+            MATRIX="{\"include\":[{\"repo\":\"openwrt\",\"branch\":\"${b_openwrt}\",\"config\":\"openwrt_main\"},{\"repo\":\"lede\",\"branch\":\"${b_lede}\",\"config\":\"lede_master\"},{\"repo\":\"immortalwrt\",\"branch\":\"${b_immortalwrt}\",\"config\":\"immortalwrt_master\"}]}"
           else
             repo="${{ inputs.source_repo }}"
             default="$(default_branch "${repo}")"
