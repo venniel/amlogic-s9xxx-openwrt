@@ -791,8 +791,15 @@ make_image() {
     # Add the source codename to the OpenWrt filename
     [[ "${source_codename}" == "openwrt" ]] && openwrt_alias="official" || openwrt_alias="${source_codename}"
     [[ -n "${openwrt_alias}" ]] && openwrt_alias+="_" || openwrt_alias=""
+    # Add the kernel author (tags) to the OpenWrt filename
+    case "${conf_kernel_tags}" in
+        stable) kernel_author="ophub" ;;
+        flippy) kernel_author="flippy" ;;
+        beta)   kernel_author="ophub-beta" ;;
+        *)      kernel_author="${conf_kernel_tags}" ;;
+    esac
     # Set OpenWrt image filename
-    openwrt_filename="openwrt_${openwrt_alias}${PLATFORM}_${board}_k${kernel}_$(date +"%Y.%m.%d").img"
+    openwrt_filename="openwrt_${openwrt_alias}${PLATFORM}_${board}_k${kernel}_${kernel_author}_$(date +"%Y.%m.%d").img"
     build_image_file="${out_path}/${openwrt_filename}"
     rm -f "${build_image_file}"
 
