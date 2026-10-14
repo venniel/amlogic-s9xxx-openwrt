@@ -275,44 +275,10 @@ on:
           - zk-r39a
           - ztl-a568
           - zysj
-      openwrt_kernel:
-        description: "选择内核版本"
+      kernel_urls:
+        description: "设置内核下载链接（可填多个，用逗号、空格或换行分隔）。链接取自 ophub/kernel 仓库的发行包，例如 https://github.com/ophub/kernel/releases/download/kernel_stable/6.6.155.tar.gz ；链接中的 kernel_stable 对应产物文件名里的作者 ophub，kernel_flippy 对应 flippy。留空则自动使用模型库默认系列的最新内核。"
         required: false
-        default: "6.12.y_6.18.y"
-        type: choice
-        options:
-          - 5.10.y
-          - 5.15.y
-          - 6.1.y
-          - 6.6.y
-          - 6.12.y
-          - 6.18.y
-          - 5.10.y_5.15.y
-          - 6.1.y_6.6.y
-          - 6.12.y_6.18.y
-          - 6.1.y_6.12.y
-          - 6.1.y_6.18.y
-      auto_kernel:
-        description: "自动使用最新内核"
-        required: false
-        default: true
-        type: boolean
-      kernel_repo:
-        description: "设置内核仓库"
-        required: false
-        default: "ophub/kernel"
-        type: choice
-        options:
-          - ophub/kernel
-      kernel_usage:
-        description: "设置稳定内核的标签"
-        required: false
-        default: "stable"
-        type: choice
-        options:
-          - stable
-          - flippy
-          - beta
+        default: ""
       openwrt_ip:
         description: "设置 OpenWrt 默认 IP 地址"
         required: false
@@ -600,10 +566,7 @@ jobs:
           openwrt_ip: ${{ inputs.openwrt_ip }}
           openwrt_size: ${{ inputs.openwrt_size }}
           openwrt_board: ${{ inputs.openwrt_board }}
-          openwrt_kernel: ${{ inputs.openwrt_kernel }}
-          auto_kernel: ${{ inputs.auto_kernel }}
-          kernel_repo: ${{ inputs.kernel_repo }}
-          kernel_usage: ${{ inputs.kernel_usage }}
+          kernel_urls: ${{ inputs.kernel_urls }}
           builder_name: ${{ inputs.builder_name }}
 
       - name: Upload packaged OpenWrt to Release

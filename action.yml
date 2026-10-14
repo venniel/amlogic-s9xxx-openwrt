@@ -46,6 +46,10 @@ inputs:
     description: "Set OpenWrt builder signature."
     required: false
     default: ""
+  kernel_urls:
+    description: "Set the kernel download links. Multiple links are separated by comma, space or newline."
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -108,6 +112,7 @@ runs:
         [[ -n "${{ inputs.kernel_usage }}"   ]] && make_args+=(-u "${{ inputs.kernel_usage }}")
         [[ -n "${{ inputs.openwrt_kernel }}" ]] && make_args+=(-k "${{ inputs.openwrt_kernel }}")
         [[ -n "${{ inputs.auto_kernel }}"    ]] && make_args+=(-a "${{ inputs.auto_kernel }}")
+        [[ -n "${{ inputs.kernel_urls }}"    ]] && make_args+=(-l "${{ inputs.kernel_urls }}")
         [[ -n "${{ inputs.openwrt_ip }}"     ]] && make_args+=(-p "${{ inputs.openwrt_ip }}")
         [[ -n "${{ inputs.openwrt_size }}"   ]] && make_args+=(-s "${{ inputs.openwrt_size }}")
         [[ -n "${builder_name}"              ]] && make_args+=(-n "${builder_name}")

@@ -102,6 +102,12 @@ specific_5xy=("5.10.y" "5.15.y")
 auto_kernel="true"
 # Initialize the kernel tags array
 declare -A tags_list
+# Kernel download links (optional). Multiple links are separated by comma, space or newline.
+# When set, they replace the automatic kernel version query, and the kernel author is
+# derived from the link tag, e.g. [ kernel_stable -> ophub ], [ kernel_flippy -> flippy ].
+kernel_urls=""
+declare -A kernel_link
+url_build_list=()
 
 # Amlogic u-boot files: https://github.com/ophub/u-boot/tree/main/u-boot/amlogic/overload
 # Array entries omit the "u-boot-" prefix of the file name (e.g. p201.bin = u-boot-p201.bin)
@@ -192,7 +198,7 @@ init_var() {
     echo -e "${STEPS} Initializing build variables..."
 
     # If it is followed by [ : ], it means that the option requires a parameter value
-    local options="b:r:u:k:a:p:s:n:"
+    local options="b:r:u:k:a:p:s:n:l:"
     parsed_args=$(getopt -o "${options}" -- "${@}")
     [[ ${?} -ne 0 ]] && error_msg "Parameter parsing failed."
     eval set -- "${parsed_args}"
@@ -267,6 +273,14 @@ init_var() {
                 shift 2
             else
                 error_msg "Invalid -n parameter [ ${2} ]!"
+            fi
+            ;;
+        -l | --kernelLinks)
+            if [[ -n "${2}" ]]; then
+                kernel_urls="${2}"
+                shift 2
+            else
+                error_msg "Invalid -l parameter [ ${2} ]!"
             fi
             ;;
         --)
@@ -567,6 +581,41 @@ download_depends() {
     rm -rf "${git_tmp_path}"
 }
 
+parse_kernel_urls() {
+    echo -e "${STEPS} Parsing the kernel download links..."
+
+    # Split the input links by comma, space or newline
+    read -ra _url_items <<<"$(echo "${kernel_urls}" | tr ',' ' ' | tr '\n' ' ' | xargs)"
+    [[ "${#_url_items[@]}" -gt 0 ]] || error_msg "The kernel download links are empty."
+
+    # Rebuild the kernel tags list from the links
+    tags_list=()
+    url_build_list=()
+    for _url in "${_url_items[@]}"; do
+        # e.g. https://github.com/ophub/kernel/releases/download/kernel_stable/6.6.155.tar.gz
+        _tag="$(echo "${_url}" | sed -nE 's#.*/download/kernel_([^/]+)/.*#\1#p')"
+        _ver="$(basename "${_url}" | sed -nE 's#^(.*)\.tar\.gz$#\1#p')"
+        [[ -n "${_tag}" && -n "${_ver}" ]] || error_msg "Invalid kernel link: [ ${_url} ]"
+        [[ "${_tag}" =~ ^(stable|flippy)$ ]] || error_msg "Unsupported kernel tag [ ${_tag} ] in [ ${_url} ]. Only [ stable ] and [ flippy ] are supported."
+
+        # Record the exact download link for this kernel
+        kernel_link["${_tag}/${_ver}"]="${_url}"
+
+        # Keep the build order and avoid duplicates
+        [[ " ${url_build_list[*]} " =~ " ${_tag}/${_ver} " ]] || url_build_list+=("${_tag}/${_ver}")
+
+        # Merge the version into the kernel tags list
+        if [[ -n "${tags_list[${_tag}]}" ]]; then
+            [[ " ${tags_list[${_tag}]} " =~ " ${_ver} " ]] || tags_list[${_tag}]+=" ${_ver}"
+        else
+            tags_list[${_tag}]="${_ver}"
+        fi
+    done
+
+    echo -e "${INFO} The kernel tags list: [ ${!tags_list[@]} ]"
+    echo -e "${INFO} The kernel build list: [ ${url_build_list[*]} ]"
+}
+
 query_kernel() {
     echo -e "${STEPS} Querying latest kernel versions..."
 
@@ -639,7 +688,7 @@ download_kernel() {
             i="1"
             for kernel_var in "${down_kernel_list[@]}"; do
                 if [[ ! -d "${kernel_path}/${key}/${kernel_var}" ]]; then
-                    kernel_down_from="https://github.com/${kernel_repo}/releases/download/kernel_${key}/${kernel_var}.tar.gz"
+                    kernel_down_from="${kernel_link["${key}/${kernel_var}"]:-https://github.com/${kernel_repo}/releases/download/kernel_${key}/${kernel_var}.tar.gz}"
                     echo -e "${INFO} (${x}.${i}) [ ${key} - ${kernel_var} ] Downloading kernel from [ ${kernel_down_from} ]"
 
                     # Download the kernel files. Retry up to 10 times with 60-second intervals on failure.
@@ -730,29 +779,35 @@ confirm_version() {
     [[ -z "${conf_kernel_tags}" ]] && error_msg "The [ ${KERNEL_TAGS} ] is missing tags part."
     [[ -z "${conf_kernel_list}" ]] && error_msg "The [ ${KERNEL_TAGS} ] is missing list part."
 
-    # Find the kernel list defined in the model database
-    model_kernel=()
-    if [[ "${conf_kernel_list}" == "all" ]]; then
-        eval "model_kernel=(\"\${${conf_kernel_tags}_kernel[@]}\")"
-        model_kernel=($(echo "${model_kernel[@]}" | xargs -n1 | sed -E 's/^([0-9]+\.[0-9]+)(\.[a-z0-9]+)?$/\1.[0-9]+/'))
+    if [[ -n "${kernel_urls}" ]]; then
+        # The kernel versions come from the user-specified links
+        conf_kernel_tags="${url_build_list[0]%%/*}"
+        build_kernel=(${tags_list[${conf_kernel_tags}]})
     else
-        # Convert the string into an array, using "_" as the delimiter
-        IFS='_' read -ra conf_kernel_list <<<"${conf_kernel_list}"
-        model_kernel=($(echo "${conf_kernel_list[@]}" | xargs -n1 | sed -E 's/^([0-9]+\.[0-9]+)(\.[a-z0-9]+)?$/\1.[0-9]+/'))
-    fi
-    # Check the kernel list
-    [[ "${#model_kernel[@]}" -eq 0 ]] && error_msg "The kernel list is empty for [ ${board} ]"
+        # Find the kernel list defined in the model database
+        model_kernel=()
+        if [[ "${conf_kernel_list}" == "all" ]]; then
+            eval "model_kernel=(\"\${${conf_kernel_tags}_kernel[@]}\")"
+            model_kernel=($(echo "${model_kernel[@]}" | xargs -n1 | sed -E 's/^([0-9]+\.[0-9]+)(\.[a-z0-9]+)?$/\1.[0-9]+/'))
+        else
+            # Convert the string into an array, using "_" as the delimiter
+            IFS='_' read -ra conf_kernel_list <<<"${conf_kernel_list}"
+            model_kernel=($(echo "${conf_kernel_list[@]}" | xargs -n1 | sed -E 's/^([0-9]+\.[0-9]+)(\.[a-z0-9]+)?$/\1.[0-9]+/'))
+        fi
+        # Check the kernel list
+        [[ "${#model_kernel[@]}" -eq 0 ]] && error_msg "The kernel list is empty for [ ${board} ]"
 
-    # Find the kernel version that matches the custom version
-    build_kernel=()
-    latest_kernel=(${tags_list[${conf_kernel_tags}]})
-    for ck in "${model_kernel[@]}"; do
-        for lk in "${latest_kernel[@]}"; do
-            [[ "${lk}" =~ ^${ck}$ ]] && build_kernel+=("${lk}")
+        # Find the kernel version that matches the custom version
+        build_kernel=()
+        latest_kernel=(${tags_list[${conf_kernel_tags}]})
+        for ck in "${model_kernel[@]}"; do
+            for lk in "${latest_kernel[@]}"; do
+                [[ "${lk}" =~ ^${ck}$ ]] && build_kernel+=("${lk}")
+            done
         done
-    done
-    # Check the kernel version
-    [[ "${#build_kernel[@]}" -eq 0 ]] && error_msg "The kernel list is invalid for [ ${board} ]"
+        # Check the kernel version
+        [[ "${#build_kernel[@]}" -eq 0 ]] && error_msg "The kernel list is invalid for [ ${board} ]"
+    fi
 }
 
 make_image() {
@@ -1337,11 +1392,21 @@ loop_make() {
             board="${b}"
             confirm_version
 
+            # Build one image for each kernel. In link mode the kernel list comes
+            # from the user-specified links; otherwise it matches the model database.
+            kernel_list=()
+            if [[ -n "${kernel_urls}" ]]; then
+                kernel_list=("${url_build_list[@]}")
+            else
+                for k in "${build_kernel[@]}"; do kernel_list+=("${conf_kernel_tags}/${k}"); done
+            fi
+
             i="1"
-            for k in "${build_kernel[@]}"; do
+            for item in "${kernel_list[@]}"; do
                 {
-                    # Set the kernel version
-                    kernel="${k}"
+                    # Set the kernel tags and version
+                    conf_kernel_tags="${item%%/*}"
+                    kernel="${item##*/}"
 
                     # Check disk space size.
                     echo -ne "(${j}.${i}) Making OpenWrt [\033[92m ${board} - ${conf_kernel_tags}/${kernel} \033[0m]. "
@@ -1385,14 +1450,19 @@ check_data
 find_openwrt
 # Download the dependency files
 download_depends
-# Query the latest kernel version
-[[ "${auto_kernel}" =~ ^(true|yes)$ ]] && query_kernel
+# Resolve the kernel versions (user links take precedence over the automatic query)
+if [[ -n "${kernel_urls}" ]]; then
+    parse_kernel_urls
+else
+    [[ "${auto_kernel}" =~ ^(true|yes)$ ]] && query_kernel
+fi
 # Download the kernel files
 download_kernel
 
 # Show make settings
 echo -e "${INFO} [ ${#make_openwrt[@]} ] target board(s) to build: [ $(echo ${make_openwrt[@]} | xargs) ]"
 echo -e "${INFO} Kernel Repo: [ ${kernel_repo} ], Kernel Usage: [ ${kernel_usage} ] \n"
+[[ -n "${kernel_urls}" ]] && echo -e "${INFO} Kernel Links: [ ${url_build_list[*]} ] \n"
 # Show server start information
 echo -e "${INFO} Server disk usage before build: \n$(df -hT ${make_path}) \n"
 
