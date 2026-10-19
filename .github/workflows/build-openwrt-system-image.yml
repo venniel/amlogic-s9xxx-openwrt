@@ -26,7 +26,7 @@ on:
       openwrt_board:
         description: "选择设备板型"
         required: false
-        default: "all"
+        default: "s905l3-cm211"
         type: choice
         options:
           - all
@@ -284,9 +284,9 @@ on:
         required: false
         default: "192.168.0.3"
       openwrt_bypass:
-        description: "启用旁路由(旁路网关)模式：不启用 DHCPv4，保留 IPv6 网络访问，网关指向 192.168.0.1"
+        description: "旁路由模式"
         required: false
-        default: false
+        default: true
         type: boolean
       use_ccache:
         description: "自动使用 ccache"
