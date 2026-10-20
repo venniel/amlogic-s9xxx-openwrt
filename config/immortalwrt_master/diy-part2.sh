@@ -50,10 +50,17 @@ rm -rf package/luci-app-amlogic
 git clone -b main https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
 
 # Add Clashoo (multi-package repository: clashoo + luci-app-clashoo)
+# Disabled for immortalwrt: it conflicts with Nikki, since both provide the
+# virtual [ mihomo ] package. The [ luci-app-clashoo ] entry in .config is
+# simply dropped by defconfig when the package is not cloned.
+# rm -rf package/openwrt-clashoo
+# git clone --depth 1 https://github.com/kenzok8/openwrt-clashoo.git package/openwrt-clashoo
+
+# Add Nikki (multi-package repository: nikki + luci-app-nikki + mihomo-meta/alpha)
 # Clone into package/ instead of adding a feed, so no bogus entry is written
 # into the firmware's package source list.
-rm -rf package/openwrt-clashoo
-git clone --depth 1 https://github.com/kenzok8/openwrt-clashoo.git package/openwrt-clashoo
+rm -rf package/openwrt-nikki
+git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki.git package/openwrt-nikki
 
 # Write the default network configuration directly
 # [ config_generate ] only generates /etc/config/network when the file does not
