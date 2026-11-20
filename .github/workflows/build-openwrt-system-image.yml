@@ -580,3 +580,22 @@ jobs:
           replaces_artifacts: true
           make_latest: true
           gh_token: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup:
+    needs: build
+    if: ${{ always() && github.event.repository.owner.id == github.event.sender.id }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+
+    steps:
+      # Keep only the two newest runs of this workflow. The action only lists
+      # completed runs, and this run is still in progress at this point, so
+      # keep one completed run to leave exactly two records once it finishes.
+      - name: Delete older runs of this workflow
+        uses: igorjs/gh-actions-clean-workflow@b910eb365da5e592d865ddd8a72d01cbd720b3b1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          workflow_names: "Build OpenWrt system image"
+          runs_older_than: 0
+          runs_to_keep: 1
