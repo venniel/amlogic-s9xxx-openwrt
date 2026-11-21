@@ -45,9 +45,15 @@ fi
 
 # ------------------------------- Additional customizations -------------------------------
 #
-# Add luci-app-amlogic
+# Add luci-app-amlogic (pinned to 26.11.2001-js). The eMMC install partition
+# sizes are hard-coded constants in openwrt-install-amlogic and change
+# between releases.
 rm -rf package/luci-app-amlogic
-git clone -b main https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
+git clone -q https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic &&
+    git -C package/luci-app-amlogic checkout -q e67c5be847e202964fa0bed4de93514ddcb47315 || {
+        echo "Failed to check out the pinned luci-app-amlogic commit."
+        exit 1
+    }
 
 # Add Clashoo (multi-package repository: clashoo + luci-app-clashoo)
 # Disabled for immortalwrt: it conflicts with Nikki, since both provide the
